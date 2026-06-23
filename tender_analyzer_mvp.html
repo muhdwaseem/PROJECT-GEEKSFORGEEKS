@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tender Analyzer MVP - Client Ingestion Engine</title>
+    
+    <!-- Tailwind CSS Engine -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome Vector Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- PDF.js Core Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <!-- Word Document Parser (Mammoth) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- jsPDF Core Document Builder -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- jsPDF-AutoTable Grid Layout Plugin -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Smooth Scrollbar design */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Lock viewports to prevent screen jiggling */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans h-screen flex flex-col overflow-hidden">
+
+    <!-- Application Header -->
+    <header class="bg-slate-900 text-white shadow-md px-6 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2.5 rounded-lg shadow-inner">
+                <i class="fa-solid fa-file-contract text-white text-xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight">Tender Analyzer</h1>
+                <p class="text-xs text-slate-400 font-medium">Enterprise Contract Analysis & Ingestion Engine</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Active File Info Badge -->
+            <div id="header-file-badge" class="hidden items-center gap-3 bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 text-sm">
+                <span class="p-1.5 rounded bg-indigo-500/20 text-indigo-300">
+                    <i class="fa-solid fa-file-invoice text-lg"></i>
+                </span>
+                <div class="text-left max-w-[150px] md:max-w-xs">
+                    <p id="header-file-name" class="font-semibold text-slate-200 truncate text-xs md:text-sm">tender_spec.pdf</p>
+                    <p id="header-file-meta" class="text-[10px] text-slate-400">12.4 KB &bull; PDF</p>
+                </div>
+                <button onclick="resetAppState()" class="text-slate-400 hover:text-rose-400 p-1.5 rounded transition duration-150 hover:bg-slate-700 ml-2" title="Remove Document">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+
+            <!-- API Key Settings Button -->
+            <button onclick="toggleKeyModal(true)" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-700 transition duration-150 text-sm font-semibold">
+                <i class="fa-solid fa-key text-amber-400"></i>
+                <span id="key-badge-text">Set API Key</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace Split Panels -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 h-[calc(100vh-80px)] overflow-hidden">
+        
+        <!-- LEFT PANEL: PDF/DOCX Upload Zone & Reader -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
+            <!-- Left Header -->
+            <div class="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 rounded bg-indigo-100 text-indigo-700">
+                        <i class="fa-solid fa-file-alt"></i>
+                    </span>
+                    <h2 class="font-semibold text-slate-800">Tender Specification</h2>
+                </div>
+                <div id="reader-meta-bar" class="hidden items-center gap-2">
+                    <span id="word-count-badge" class="text-xs text-slate-500 bg-slate-200/60 px-2 py-1 rounded font-medium">0 words</span>
+                    <button onclick="copyPlaintext()" class="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded transition border border-indigo-200">
+                        <i id="copy-icon" class="fa-solid fa-copy"></i>
+                        <span id="copy-text">Copy Plaintext</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Left Content Area -->
+            <div class="flex-1 flex flex-col overflow-hidden relative">
+                
+                <!-- 1. Drag and Drop Upload Box -->
+                <div id="upload-zone" class="flex-1 flex flex-col items-center justify-center p-8 transition-all bg-white" ondragenter="handleDragEnter(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                    <div class="max-w-md w-full text-center flex flex-col items-center">
+                        <div class="p-5 bg-indigo-50 rounded-full mb-4">
+                            <i class="fa-solid fa-cloud-arrow-up text-indigo-500 text-4xl animate-pulse"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-1">Upload tender documents</h3>
+                        <p class="text-sm text-slate-500 mb-6 leading-relaxed">
+                            Drag and drop your PDF or DOCX procurement files here. Ingestion and text processing occur entirely in your local browser sandbox.
+                        </p>
+                        
+                        <!-- Internal Error Banner -->
+                        <div id="upload-error-box" class="hidden w-full mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-lg text-left gap-2 items-start animate-fade-in">
+                            <i class="fa-solid fa-circle-info text-rose-500 mt-0.5 shrink-0 text-sm"></i>
+                            <div id="upload-error-message">Error info.</div>
+                        </div>
+
+                        <label class="cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-6 rounded-lg transition duration-150 shadow-md inline-block">
+                            Select File
+                            <input type="file" id="file-input-raw" class="hidden" accept=".pdf,.docx" onchange="handleFileSelect(event)" />
+                        </label>
+                        <p class="text-xs text-slate-400 mt-3">Maximum recommended size: 35MB</p>
+                    </div>
+                </div>
+
+                <!-- 2. Local Document Processing Loading Indicator -->
+                <div id="reader-loading" class="hidden flex-1 flex-col items-center justify-center p-8 bg-slate-50">
+                    <div class="max-w-xs w-full text-center">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
+                            <i class="fa-solid fa-circle-notch animate-spin text-indigo-600 text-4xl mb-4"></i>
+                            <h4 class="font-semibold text-slate-800 text-sm mb-1">Parsing Document</h4>
+                            <p id="loading-step-label" class="text-xs text-indigo-600 font-medium mb-4">Extracting text streams...</p>
+                            
+                            <!-- Static Progress Bar -->
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                                <div id="loading-progress-bar" class="bg-indigo-600 h-full transition-all duration-300 rounded-full w-0"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Scrollable Reader Window -->
+                <div id="reader-active-container" class="hidden flex-1 flex-col overflow-hidden">
+                    <!-- Text Filter Subbar -->
+                    <div class="p-3 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                        <div class="relative flex-1 min-w-[200px]">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <i class="fa-solid fa-magnifying-glass text-xs"></i>
+                            </div>
+                            <input type="text" id="document-filter-input" placeholder="Filter or search text segments..." oninput="handleTextFilterChange(this.value)" class="w-full pl-9 pr-8 py-1.5 text-xs rounded-md border border-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white" />
+                            <button id="clear-search-btn" onclick="clearSearchFilter()" class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-slate-400 hover:text-slate-600">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        
+                        <div id="linked-excerpt-alert" class="hidden text-xs bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1 rounded-md flex items-center gap-1.5 animate-fade-in shrink-0">
+                            <i class="fa-solid fa-crosshairs animate-bounce text-amber-600"></i>
+                            <span>Linked Excerpt View</span>
+                            <button onclick="clearExcerptHighlight()" class="font-bold hover:text-amber-900 ml-1 text-[10px]">[Clear]</button>
+                        </div>
+                    </div>
+
+                    <!-- Reader Viewport -->
+                    <div id="document-text-viewport" class="flex-1 overflow-y-auto p-4 md:p-6 font-mono text-xs md:text-sm leading-relaxed text-slate-700 whitespace-pre-wrap select-text selection:bg-indigo-200 bg-slate-50/20">
+                        Plaintext loading area...
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- RIGHT PANEL: Chat / Extracted Summary Workspace -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-full">
+            <!-- Tab Controllers -->
+            <div class="flex border-b border-slate-200 bg-slate-50/50 shrink-0">
+                <button onclick="switchTab('chat')" id="tab-btn-chat" class="flex-1 py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 border-indigo-600 text-indigo-600 bg-white transition duration-150">
+                    <i class="fa-solid fa-comments"></i>
+                    Interactive Chat
+                </button>
+                <button onclick="switchTab('summary')" id="tab-btn-summary" class="flex-1 py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50 transition duration-150">
+                    <i class="fa-solid fa-list-check"></i>
+                    Extracted Summary
+                </button>
+            </div>
+
+            <!-- Tab Contents Container -->
+            <div class="flex-1 flex flex-col overflow-hidden">
+                
+                <!-- CHAT TAB VIEWPORT -->
+                <div id="viewport-chat" class="flex-1 flex flex-col overflow-hidden bg-slate-50/40">
+                    <!-- Message Stream -->
+                    <div id="chat-messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 font-normal">
+                        <!-- Initial Assistant Greeting -->
+                        <div class="flex flex-col max-w-[85%] mr-auto items-start">
+                            <div class="px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm bg-white text-slate-800 border border-slate-200/80 rounded-tl-none">
+                                👋 Welcome to Tender Analyzer! Upload a tender document (PDF or DOCX) in the left panel. Once parsed, I will assist you with context-aware analysis.
+                            </div>
+                            <span class="text-[10px] text-slate-400 mt-1 px-1">Just now</span>
+                        </div>
+                    </div>
+
+                    <!-- AI Processing Loading Bar -->
+                    <div id="chat-thinking-indicator" class="hidden px-4 py-2 border-t border-slate-100 bg-white/70 flex items-center gap-2">
+                        <i class="fa-solid fa-robot text-indigo-500 animate-bounce"></i>
+                        <span class="text-xs text-slate-500 font-medium">Analyzing document parameters...</span>
+                    </div>
+
+                    <!-- Suggestion Prompts Row -->
+                    <div id="chat-suggestions-tray" class="hidden px-4 py-2 border-t border-slate-100 bg-white/70 gap-2 overflow-x-auto no-scrollbar shrink-0">
+                        <button onclick="applySuggestedQuery('Summarize criteria')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-indigo-100 transition whitespace-nowrap">Summarize criteria</button>
+                        <button onclick="applySuggestedQuery('Timeline & Deadlines')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-indigo-100 transition whitespace-nowrap">Timeline & Deadlines</button>
+                        <button onclick="applySuggestedQuery('Deliverables')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-indigo-100 transition whitespace-nowrap">Deliverables</button>
+                        <button onclick="applySuggestedQuery('Risk Factors')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-indigo-100 transition whitespace-nowrap">Risk Factors</button>
+                    </div>
+
+                    <!-- Input Tray Form -->
+                    <form onsubmit="handleChatSubmit(event)" class="p-4 border-t border-slate-200/80 bg-white flex gap-2 shrink-0">
+                        <input type="text" id="chat-user-input" placeholder="Please upload a document to analyze..." disabled class="flex-1 px-4 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-slate-50/50 disabled:bg-slate-100 disabled:cursor-not-allowed" />
+                        <button type="submit" id="chat-submit-btn" disabled class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-lg transition duration-150 shadow-md disabled:bg-slate-300 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5">
+                            <i class="fa-solid fa-paper-plane text-xs"></i>
+                            <span>Ask</span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- SUMMARY TAB VIEWPORT -->
+                <div id="viewport-summary" class="hidden flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 space-y-4">
+                    
+                    <!-- Ingestion Control Deck / Action Row -->
+                    <div id="summary-controls-row" class="hidden flex-col md:flex-row gap-3 items-stretch md:items-center justify-between bg-white p-3.5 rounded-lg border border-slate-200 shadow-sm shrink-0">
+                        <div>
+                          <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Analysis Control Deck</h3>
+                          <p class="text-xs text-slate-500">Structured parameters extracted via Gemini Schema validation.</p>
+                        </div>
+                        <div class="flex gap-2 shrink-0">
+                            <button id="pdf-export-btn" onclick="triggerPDFReportExport()" class="flex-1 md:flex-initial flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition">
+                                <i class="fa-solid fa-download"></i>
+                                <span id="pdf-export-label">Export PDF Report</span>
+                            </button>
+                            <button onclick="runStructuredAnalysis()" class="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Regenerate</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Extraction Loader Card -->
+                    <div id="summary-loader" class="hidden py-12 flex flex-col items-center justify-center bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
+                        <i class="fa-solid fa-circle-notch animate-spin text-indigo-600 text-3xl"></i>
+                        <div class="text-center">
+                          <p class="text-sm font-bold text-slate-800">Synthesizing Structural Parameters...</p>
+                          <p class="text-xs text-slate-400 max-w-xs mt-1 px-4">Parsing clauses, matching deadlines, and cataloging potential risks via Gemini JSON schema pipeline.</p>
+                        </div>
+                    </div>
+
+                    <!-- Extraction Error Banner -->
+                    <div id="summary-error-box" class="hidden p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-800 text-xs flex items-start gap-2 animate-fade-in">
+                        <i class="fa-solid fa-circle-exclamation text-rose-500 text-lg mt-0.5 shrink-0"></i>
+                        <div>
+                          <p class="font-bold">Summary Extraction Failed</p>
+                          <p id="summary-error-message" class="mt-1">Detailed error info.</p>
+                          <button onclick="runStructuredAnalysis()" class="mt-2 text-indigo-600 font-bold hover:underline">Try Again</button>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Accordion Grid (Will be generated dynamically) -->
+                    <div id="summary-accordions-container" class="space-y-3">
+                        <!-- Dynamic components injected here -->
+                    </div>
+
+                    <!-- Blank State Inactive Notice -->
+                    <div id="summary-blank-state" class="flex flex-col items-center justify-center py-16 text-center bg-white rounded-xl border border-dashed border-slate-200 p-8 shadow-sm">
+                        <div class="p-4 bg-indigo-50 rounded-full mb-3 text-indigo-600 text-2xl">
+                            <i class="fa-solid fa-folder-open"></i>
+                        </div>
+                        <p class="text-sm text-slate-800 font-bold mb-1">Extracted Summary Pending</p>
+                        <p class="text-xs text-slate-400 max-w-xs leading-normal">
+                          Once you upload a tender specification in the left panel, the AI will perform a structured JSON analysis of all terms, values, risks, and deadlines.
+                        </p>
+                    </div>
+
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Secure Client API Key Configuration Modal -->
+    <div id="key-modal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl max-w-md w-full shadow-2xl border border-slate-100 overflow-hidden transform transition-all duration-300">
+            <div class="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-shield-halved text-amber-400"></i>
+                    <h3 class="font-bold text-lg">Secure Gemini API Setup</h3>
+                </div>
+                <button onclick="toggleKeyModal(false)" class="text-slate-400 hover:text-white transition duration-150">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <p class="text-xs text-slate-500 leading-relaxed">
+                    This Tender Ingestion platform works completely inside your client web context. All document parsers, layout compiles, and API requests to Google execute directly from your machine. To proceed, please assign your private Gemini API key below.
+                </p>
+
+                <div class="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs text-slate-600 flex items-start gap-2.5">
+                    <i class="fa-solid fa-lightbulb text-amber-500 text-base shrink-0 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold mb-0.5">How do I acquire an API Key?</p>
+                        <p>Generate a key in seconds via <a href="https://aistudio.google.com/" target="_blank" class="text-indigo-600 hover:underline font-bold">Google AI Studio <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i></a>. Select the Free or Pay-as-you-go Plan.</p>
+                    </div>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-xs uppercase tracking-wider font-extrabold text-slate-500">Google Gemini API Key</label>
+                    <div class="relative">
+                        <input type="password" id="api-key-input" placeholder="AIzaSy..." class="w-full pl-3 pr-10 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-mono" />
+                        <button onclick="togglePasswordVisibility('api-key-input')" type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600">
+                            <i id="api-key-eye-icon" class="fa-solid fa-eye text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="text-[10px] text-slate-400 italic">
+                    ⚠️ Your private credential key is saved securely inside your browser's Local Storage context and never relayed to any server apart from Google's official API endpoint.
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <button onclick="toggleKeyModal(false)" class="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition duration-150">Cancel</button>
+                <button onclick="saveApiKeyFromModal()" class="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition duration-150 shadow-md">Save Credential</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN SYSTEM CONTROLLER SCRIPTS -->
+    <script>
+        // Set worker path dynamically for PDF.js parsing
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+
+        // Global Application State Map
+        const state = {
+            apiKey: localStorage.getItem('TENDER_ANALYZER_GEMINI_API_KEY') || '',
+            extractedText: '',
+            fileName: '',
+            fileSize: 0,
+            fileType: '',
+            searchQuery: '',
+            activeHighlight: '',
+            activeTab: 'chat', // 'chat' or 'summary'
+            chatMessages: [
+                {
+                    sender: 'assistant',
+                    text: "👋 Welcome to Tender Analyzer! Upload a tender document (PDF or DOCX) in the left panel. Once parsed, I will assist you with context-aware analysis.",
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+            ],
+            summaryData: null,
+            openAccordions: {
+                profile: true,
+                parties: true,
+                payment: true,
+                penalties: true,
+                deadlines: true,
+                deliverables: true,
+                redFlags: true
+            },
+            isAnalyzingSummary: false,
+            isSendingChat: false
+        };
+
+        // Bootstrap Initial UI states
+        window.onload = function() {
+            updateApiKeyIndicator();
+            renderChatHistory();
+        };
+
+        // UI: Toggle Settings API Key Modal
+        function toggleKeyModal(show) {
+            const modal = document.getElementById('key-modal');
+            const input = document.getElementById('api-key-input');
+            if (show) {
+                input.value = state.apiKey;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        // Toggle Key Input Visibility
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const eyeIcon = document.getElementById(inputId + '-eye-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeIcon.classList.remove('fa-eye');
+                eyeIcon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                eyeIcon.classList.remove('fa-eye-slash');
+                eyeIcon.classList.add('fa-eye');
+            }
+        }
+
+        // Save Credential safely to LocalStorage
+        function saveApiKeyFromModal() {
+            const keyVal = document.getElementById('api-key-input').value.trim();
+            state.apiKey = keyVal;
+            localStorage.setItem('TENDER_ANALYZER_GEMINI_API_KEY', keyVal);
+            updateApiKeyIndicator();
+            toggleKeyModal(false);
+        }
+
+        // Update Header Key Badge visual indicator state
+        function updateApiKeyIndicator() {
+            const textBadge = document.getElementById('key-badge-text');
+            if (state.apiKey) {
+                textBadge.innerText = "Key Configured";
+                textBadge.classList.remove('text-amber-400');
+                textBadge.classList.add('text-emerald-400');
+            } else {
+                textBadge.innerText = "Set API Key";
+                textBadge.classList.remove('text-emerald-400');
+                textBadge.classList.add('text-amber-400');
+            }
+        }
+
+        // FILE UPLOAD AND INGESTION LOGIC
+        function handleDragEnter(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('upload-zone').classList.add('bg-indigo-50/70', 'border-2', 'border-dashed', 'border-indigo-400'); }
+        function handleDragOver(e) { e.preventDefault(); e.stopPropagation(); }
+        function handleDragLeave(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('upload-zone').classList.remove('bg-indigo-50/70', 'border-2', 'border-dashed', 'border-indigo-400'); }
+        
+        function handleDrop(e) {
+            e.preventDefault(); e.stopPropagation();
+            document.getElementById('upload-zone').classList.remove('bg-indigo-50/70', 'border-2', 'border-dashed', 'border-indigo-400');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                processRawFile(e.dataTransfer.files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files && e.target.files[0]) {
+                processRawFile(e.target.files[0]);
+            }
+        }
+
+        // Process file ingestion routing
+        async function processRawFile(selectedFile) {
+            const uploadError = document.getElementById('upload-error-box');
+            uploadError.classList.add('hidden');
+            
+            const ext = selectedFile.name.split('.').pop().toLowerCase();
+            if (ext !== 'pdf' && ext !== 'docx') {
+                showUploadError("Unsupported format. Please select a valid PDF or DOCX file.");
+                return;
+            }
+
+            state.fileName = selectedFile.name;
+            state.fileSize = selectedFile.size;
+            state.fileType = ext;
+
+            // Trigger Loading state transition
+            toggleIngestionSpinner(true);
+            updateLoadingStep("Reading local file array stream...", 15);
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const arrayBuffer = e.target.result;
+                    let textResult = "";
+
+                    if (ext === 'pdf') {
+                        textResult = await parsePDFBytes(arrayBuffer);
+                    } else if (ext === 'docx') {
+                        textResult = await parseDocxBytes(arrayBuffer);
+                    }
+
+                    if (!textResult || textResult.trim().length === 0) {
+                        throw new Error("Local text extraction extracted zero bytes of legible content. The document might be image-only / scanned.");
+                    }
+
+                    // Success state assignment
+                    state.extractedText = textResult;
+                    updateLoadingStep("Extraction successful!", 100);
+
+                    // Map state to Header details
+                    displayHeaderDetails();
+                    // Load and show text reader panel
+                    toggleIngestionSpinner(false);
+                    renderTextReaderView();
+
+                    // Automatically generate greetings announcement inside Chat tab
+                    appendChatMessage('assistant', `📁 "${state.fileName}" has been successfully imported and parsed locally (${(textResult.split(/\s+/).length).toLocaleString()} words). \n\nI have fully ingested this specification. I am now automatically generating your structured dashboard parameters. You can track progress or chat with me on the right panel!`);
+                    
+                    // Auto-trigger Gemini Structured Extraction
+                    runStructuredAnalysis();
+
+                } catch (err) {
+                    console.error("Local parsing error: ", err);
+                    showUploadError(err.message || "An unexpected error occurred during local ingestion.");
+                    resetAppState();
+                }
+            };
+
+            reader.onerror = function() {
+                showUploadError("Failed to read the document file stream from storage.");
+                resetAppState();
+            };
+
+            reader.readAsArrayBuffer(selectedFile);
+        }
+
+        // Show File Upload Error message
+        function showUploadError(msg) {
+            const errorBox = document.getElementById('upload-error-box');
+            const errorLabel = document.getElementById('upload-error-message');
+            errorLabel.innerText = msg;
+            errorBox.classList.remove('hidden');
+            errorBox.classList.add('flex');
+        }
+
+        // Loader Toggle controller
+        function toggleIngestionSpinner(show) {
+            const uploadZone = document.getElementById('upload-zone');
+            const loadingZone = document.getElementById('reader-loading');
+            if (show) {
+                uploadZone.classList.add('hidden');
+                loadingZone.classList.remove('hidden');
+                loadingZone.classList.add('flex');
+            } else {
+                loadingZone.classList.add('hidden');
+                loadingZone.classList.remove('flex');
+            }
+        }
+
+        // Update Loading state progress details
+        function updateLoadingStep(stepLabel, progressPercent) {
+            document.getElementById('loading-step-label').innerText = stepLabel;
+            document.getElementById('loading-progress-bar').style.width = `${progressPercent}%`;
+        }
+
+        // PDF parser helper using pure browser execution
+        async function parsePDFBytes(arrayBuffer) {
+            updateLoadingStep("Initializing PDF.js engine...", 30);
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            updateLoadingStep(`Extracting raw streams across ${pdf.numPages} pages...`, 50);
+            let parsedText = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                parsedText += `[Page ${i}]\n${pageText}\n\n`;
+                const progressDelta = 50 + Math.floor((i / pdf.numPages) * 45);
+                updateLoadingStep(`De-serializing page ${i} of ${pdf.numPages}...`, progressDelta);
+            }
+            return parsedText;
+        }
+
+        // Word parser helper using mammoth browser build
+        async function parseDocxBytes(arrayBuffer) {
+            updateLoadingStep("De-serializing DOCX XML mappings...", 60);
+            const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+            updateLoadingStep("Unpacking raw text structures...", 90);
+            return result.value;
+        }
+
+        // Display header block and reset controllers
+        function displayHeaderDetails() {
+            document.getElementById('header-file-name').innerText = state.fileName;
+            document.getElementById('header-file-meta').innerHTML = `${formatBytes(state.fileSize)} &bull; ${state.fileType.toUpperCase()}`;
+            document.getElementById('header-file-badge').classList.remove('hidden');
+            document.getElementById('header-file-badge').classList.add('flex');
+        }
+
+        // Update scrollable plaintext viewport
+        function renderTextReaderView() {
+            const countWords = state.extractedText.split(/\s+/).filter(Boolean).length;
+            document.getElementById('word-count-badge').innerText = `${countWords.toLocaleString()} words`;
+            document.getElementById('reader-meta-bar').classList.remove('hidden');
+            document.getElementById('reader-meta-bar').classList.add('flex');
+            document.getElementById('upload-zone').classList.add('hidden');
+            document.getElementById('reader-active-container').classList.remove('hidden');
+            document.getElementById('reader-active-container').classList.add('flex');
+            
+            // Unlock Input box
+            document.getElementById('chat-user-input').disabled = false;
+            document.getElementById('chat-user-input').placeholder = "Ask any analytical question...";
+            document.getElementById('chat-submit-btn').disabled = false;
+            document.getElementById('chat-suggestions-tray').classList.remove('hidden');
+            document.getElementById('chat-suggestions-tray').classList.add('flex');
+
+            renderDocumentText();
+        }
+
+        // Redraw plaintext viewer with highlights and filters
+        function renderDocumentText() {
+            const viewport = document.getElementById('document-text-viewport');
+            
+            if (state.activeHighlight) {
+                // Focus: Click-bound target grounding highlights
+                const safeExcerpt = escapeRegExp(state.activeHighlight);
+                const segments = state.extractedText.split(new RegExp(`(${safeExcerpt})`, 'i'));
+                
+                viewport.innerHTML = '';
+                segments.forEach(seg => {
+                    if (seg.toLowerCase() === state.activeHighlight.toLowerCase()) {
+                        const markNode = document.createElement('mark');
+                        markNode.id = 'active-highlight-mark';
+                        markNode.className = 'bg-amber-300 text-slate-900 rounded px-1.5 py-0.5 font-semibold ring-2 ring-amber-500 animate-pulse';
+                        markNode.innerText = seg;
+                        viewport.appendChild(markNode);
+                    } else {
+                        viewport.appendChild(document.createTextNode(seg));
+                    }
+                });
+                
+                document.getElementById('linked-excerpt-alert').classList.remove('hidden');
+                document.getElementById('linked-excerpt-alert').classList.add('flex');
+            } else if (state.searchQuery) {
+                // Focus: Query match search text filters
+                const safeSearch = escapeRegExp(state.searchQuery);
+                const segments = state.extractedText.split(new RegExp(`(${safeSearch})`, 'gi'));
+                
+                viewport.innerHTML = '';
+                segments.forEach(seg => {
+                    if (seg.toLowerCase() === state.searchQuery.toLowerCase()) {
+                        const markNode = document.createElement('mark');
+                        markNode.className = 'bg-yellow-200 text-slate-900 rounded-sm px-0.5 font-semibold';
+                        markNode.innerText = seg;
+                        viewport.appendChild(markNode);
+                    } else {
+                        viewport.appendChild(document.createTextNode(seg));
+                    }
+                });
+                
+                document.getElementById('clear-search-btn').classList.remove('hidden');
+            } else {
+                viewport.innerText = state.extractedText;
+                document.getElementById('clear-search-btn').classList.add('hidden');
+                document.getElementById('linked-excerpt-alert').classList.add('hidden');
+            }
+        }
+
+        // Document text highlight click anchors
+        function focusAndHighlightSegment(textSegment) {
+            state.activeHighlight = textSegment;
+            renderDocumentText();
+            setTimeout(() => {
+                const node = document.getElementById('active-highlight-mark');
+                if (node) {
+                    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+
+        function clearExcerptHighlight() {
+            state.activeHighlight = '';
+            renderDocumentText();
+        }
+
+        function handleTextFilterChange(query) {
+            state.activeHighlight = ''; // Reset details link on key typing
+            state.searchQuery = query;
+            renderDocumentText();
+        }
+
+        function clearSearchFilter() {
+            document.getElementById('document-filter-input').value = '';
+            state.searchQuery = '';
+            renderDocumentText();
+        }
+
+        function copyPlaintext() {
+            const dummy = document.createElement("textarea");
+            document.body.appendChild(dummy);
+            dummy.value = state.extractedText;
+            dummy.select();
+            document.execCommand("copy");
+            document.body.removeChild(dummy);
+
+            const copyIcon = document.getElementById('copy-icon');
+            const copyLabel = document.getElementById('copy-text');
+            
+            copyIcon.className = "fa-solid fa-check text-emerald-500";
+            copyLabel.innerText = "Copied!";
+            setTimeout(() => {
+                copyIcon.className = "fa-solid fa-copy";
+                copyLabel.innerText = "Copy Plaintext";
+            }, 2000);
+        }
+
+        // Global Reset of active environment
+        function resetAppState() {
+            state.extractedText = '';
+            state.fileName = '';
+            state.fileSize = 0;
+            state.fileType = '';
+            state.searchQuery = '';
+            state.activeHighlight = '';
+            state.summaryData = null;
+            state.chatMessages = [
+                {
+                    sender: 'assistant',
+                    text: "👋 Welcome to Tender Analyzer! Upload a tender document (PDF or DOCX) in the left panel. Once parsed, I will assist you with context-aware analysis.",
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }
+            ];
+
+            document.getElementById('header-file-badge').classList.add('hidden');
+            document.getElementById('reader-active-container').classList.add('hidden');
+            document.getElementById('reader-meta-bar').classList.add('hidden');
+            document.getElementById('upload-zone').classList.remove('hidden');
+            
+            // Re-lock controls
+            document.getElementById('chat-user-input').disabled = true;
+            document.getElementById('chat-user-input').placeholder = "Please upload a document to unlock chat...";
+            document.getElementById('chat-submit-btn').disabled = true;
+            document.getElementById('chat-suggestions-tray').classList.add('hidden');
+            document.getElementById('summary-blank-state').classList.remove('hidden');
+            document.getElementById('summary-controls-row').classList.add('hidden');
+            document.getElementById('summary-accordions-container').innerHTML = '';
+            document.getElementById('summary-error-box').classList.add('hidden');
+
+            renderChatHistory();
+        }
+
+        // CHAT AND INTERACTION WORKSPACE
+        function switchTab(tabId) {
+            state.activeTab = tabId;
+            const tabChat = document.getElementById('tab-btn-chat');
+            const tabSum = document.getElementById('tab-btn-summary');
+            const viewChat = document.getElementById('viewport-chat');
+            const viewSum = document.getElementById('viewport-summary');
+
+            if (tabId === 'chat') {
+                tabChat.className = "flex-1 py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 border-indigo-600 text-indigo-600 bg-white transition duration-150";
+                tabSum.className = "flex-1 py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50 transition duration-150";
+                viewChat.classList.remove('hidden');
+                viewChat.classList.add('flex');
+                viewSum.classList.add('hidden');
+            } else {
+                tabSum.className = "flex-1 py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 border-indigo-600 text-indigo-600 bg-white transition duration-150";
+                tabChat.className = "flex-1 py-3 px-4 text-sm font-semibold flex items-center justify-center gap-2 border-b-2 border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/50 transition duration-150";
+                viewSum.classList.remove('hidden');
+                viewChat.classList.add('hidden');
+                viewChat.classList.remove('flex');
+            }
+        }
+
+        function renderChatHistory() {
+            const container = document.getElementById('chat-messages-container');
+            container.innerHTML = '';
+            state.chatMessages.forEach(msg => {
+                const msgBox = document.createElement('div');
+                msgBox.className = `flex flex-col max-w-[85%] ${msg.sender === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'}`;
+                
+                const bubble = document.createElement('div');
+                bubble.className = `px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm whitespace-pre-line ${
+                    msg.sender === 'user' 
+                        ? 'bg-indigo-600 text-white rounded-tr-none' 
+                        : 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-none'
+                }`;
+                bubble.innerText = msg.text;
+                
+                const ts = document.createElement('span');
+                ts.className = 'text-[10px] text-slate-400 mt-1 px-1';
+                ts.innerText = msg.timestamp;
+
+                msgBox.appendChild(bubble);
+                msgBox.appendChild(ts);
+                container.appendChild(msgBox);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function appendChatMessage(sender, text) {
+            state.chatMessages.push({
+                sender: sender,
+                text: text,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+            renderChatHistory();
+        }
+
+        function handleChatSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('chat-user-input');
+            const text = input.value.trim();
+            if (!text || state.isSendingChat) return;
+
+            input.value = '';
+            sendMessageToGemini(text);
+        }
+
+        function applySuggestedQuery(promptType) {
+            const items = {
+                'Summarize criteria': "Give me a structured summary of the key evaluation and eligibility criteria.",
+                'Timeline & Deadlines': "List all key deadlines, milestones, and contract timeline requirements.",
+                'Deliverables': "What are the exact deliverables, reports, or services required by this tender?",
+                'Risk Factors': "Are there any liabilities, strict penalty clauses, or obvious risks mentioned?"
+            };
+            sendMessageToGemini(items[promptType]);
+        }
+
+        // RETRY AND API CONNECTIONS
+        async function callGeminiWithRetry(payload, maxRetries = 5) {
+            if (!state.apiKey) {
+                throw new Error("Missing credentials. Please click [Set API Key] in the top panel.");
+            }
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${state.apiKey}`;
+            let delay = 1000;
+
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return await response.json();
+                    }
+
+                    if (response.status !== 429 && response.status < 500) {
+                        const errDetails = await response.json().catch(() => ({}));
+                        throw new Error(errDetails?.error?.message || `API HTTP status error: ${response.status}`);
+                    }
+                } catch (err) {
+                    if (attempt === maxRetries - 1) throw err;
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, delay));
+                delay *= 2;
+            }
+        }
+
+        async function sendMessageToGemini(userPrompt) {
+            appendChatMessage('user', userPrompt);
+            
+            if (!state.apiKey) {
+                appendChatMessage('assistant', "⚠️ **Security Check Failed**: No active API Key found. Please paste your Google Gemini Key into the configure widget above to enable active chat groundings.");
+                toggleKeyModal(true);
+                return;
+            }
+
+            state.isSendingChat = true;
+            document.getElementById('chat-thinking-indicator').classList.remove('hidden');
+
+            try {
+                const systemPrompt = `You are a contract analysis assistant. You have been given the full text of a tender/contract document below. Answer the user's questions ONLY based on this document. If the answer isn't in the document, say so clearly. Always cite which section or clause you're referencing when possible.
+
+DOCUMENT TEXT:
+${state.extractedText}`;
+
+                // Convert history format cleanly
+                const contents = state.chatMessages
+                    .filter(msg => msg.sender === 'user' || msg.sender === 'assistant')
+                    .map(msg => ({
+                        role: msg.sender === 'user' ? 'user' : 'model',
+                        parts: [{ text: msg.text }]
+                    }));
+
+                const payload = {
+                    contents: contents,
+                    systemInstruction: { parts: [{ text: systemPrompt }] }
+                };
+
+                const data = await callGeminiWithRetry(payload);
+                const textReply = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response received.";
+                appendChatMessage('assistant', textReply);
+
+            } catch (err) {
+                console.error(err);
+                appendChatMessage('assistant', `⚠️ **Connection Incident**: ${err.message || "Failed to reach Google APIs. Verify network latency and try again."}`);
+            } finally {
+                state.isSendingChat = false;
+                document.getElementById('chat-thinking-indicator').classList.add('hidden');
+            }
+        }
+
+        // STRUCTURED EXTRACTION LOGIC
+        async function runStructuredAnalysis() {
+            if (!state.extractedText) return;
+
+            if (!state.apiKey) {
+                const summaryErr = document.getElementById('summary-error-box');
+                document.getElementById('summary-error-message').innerText = "An API Key is required to run the Structured analysis model. Set your key inside the Header bar.";
+                summaryErr.classList.remove('hidden');
+                toggleKeyModal(true);
+                return;
+            }
+
+            state.isAnalyzingSummary = true;
+            document.getElementById('summary-blank-state').classList.add('hidden');
+            document.getElementById('summary-error-box').classList.add('hidden');
+            document.getElementById('summary-loader').classList.remove('hidden');
+            document.getElementById('summary-controls-row').classList.add('hidden');
+            document.getElementById('summary-accordions-container').innerHTML = '';
+
+            try {
+                // OpenAPI compliant responseSchema definition
+                const schema = {
+                    type: "OBJECT",
+                    properties: {
+                        parties: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    name: { type: "STRING" },
+                                    role: { type: "STRING" }
+                                },
+                                required: ["name", "role"]
+                            }
+                        },
+                        contract_value: { type: "STRING" },
+                        currency: { type: "STRING" },
+                        payment_terms: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    description: { type: "STRING" },
+                                    due: { type: "STRING" }
+                                },
+                                required: ["description", "due"]
+                            }
+                        },
+                        penalty_clauses: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    description: { type: "STRING" },
+                                    amount_or_rate: { type: "STRING" },
+                                    trigger_condition: { type: "STRING" },
+                                    source_excerpt: { type: "STRING" }
+                                },
+                                required: ["description", "amount_or_rate", "trigger_condition", "source_excerpt"]
+                            }
+                        },
+                        deadlines: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    milestone: { type: "STRING" },
+                                    date_or_duration: { type: "STRING" }
+                                },
+                                required: ["milestone", "date_or_duration"]
+                            }
+                        },
+                        deliverables: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    description: { type: "STRING" }
+                                },
+                                required: ["description"]
+                            }
+                        },
+                        governing_law: { type: "STRING" },
+                        termination_clauses: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    description: { type: "STRING" }
+                                },
+                                required: ["description"]
+                            }
+                        },
+                        red_flags: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    description: { type: "STRING" },
+                                    severity: { type: "STRING" },
+                                    source_excerpt: { type: "STRING" }
+                                },
+                                required: ["description", "severity", "source_excerpt"]
+                            }
+                        }
+                    },
+                    required: [
+                        "parties", "contract_value", "currency", "payment_terms", 
+                        "penalty_clauses", "deadlines", "deliverables", "governing_law", 
+                        "termination_clauses", "red_flags"
+                    ]
+                };
+
+                const systemPrompt = `You are a contract/tender analysis engine. Extract the relevant fields from the document text below according to the provided schema. If a field isn't present in the document, return an empty array or empty string. Do not hallucinate values.
+
+For each penalty clause and red flag, also include the exact verbatim sentence or clause reference from the document in the source_excerpt field.`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: `DOCUMENT TEXT:\n${state.extractedText}` }] }],
+                    systemInstruction: { parts: [{ text: systemPrompt }] },
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: schema
+                    }
+                };
+
+                const data = await callGeminiWithRetry(payload);
+                const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!textResponse) {
+                    throw new Error("Malformed schema response payload from server.");
+                }
+
+                state.summaryData = JSON.parse(textResponse);
+                
+                // Show elements
+                document.getElementById('summary-controls-row').classList.remove('hidden');
+                document.getElementById('summary-controls-row').classList.add('flex');
+                renderSummaryDashboard();
+
+            } catch (err) {
+                console.error(err);
+                const summaryErr = document.getElementById('summary-error-box');
+                document.getElementById('summary-error-message').innerText = err.message || "Unknown error parsing structure layout.";
+                summaryErr.classList.remove('hidden');
+            } finally {
+                state.isAnalyzingSummary = false;
+                document.getElementById('summary-loader').classList.add('hidden');
+            }
+        }
+
+        // ACCORDION LAYOUT INJECTION
+        function toggleAccordionState(key) {
+            state.openAccordions[key] = !state.openAccordions[key];
+            renderSummaryDashboard();
+        }
+
+        function renderSummaryDashboard() {
+            const container = document.getElementById('summary-accordions-container');
+            container.innerHTML = '';
+
+            const d = state.summaryData;
+            if (!d) return;
+
+            // Template helper for accordions
+            const createAccordion = (key, title, emoji, bgColor, textColor, renderBodyFn) => {
+                const isOpen = state.openAccordions[key];
+                
+                const root = document.createElement('div');
+                root.className = 'bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden';
+
+                const btn = document.createElement('button');
+                btn.className = 'w-full px-4 py-3 flex items-center justify-between bg-slate-50/60 font-bold text-sm text-slate-700 hover:bg-slate-50 transition';
+                btn.onclick = () => toggleAccordionState(key);
+                
+                btn.innerHTML = `
+                    <span class="flex items-center gap-2">
+                        <span class="p-1 rounded ${bgColor} ${textColor}">${emoji}</span>
+                        ${title}
+                    </span>
+                    <i class="fa-solid fa-chevron-down text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}"></i>
+                `;
+
+                root.appendChild(btn);
+
+                if (isOpen) {
+                    const body = document.createElement('div');
+                    body.className = 'p-4 border-t border-slate-100';
+                    renderBodyFn(body);
+                    root.appendChild(body);
+                }
+
+                container.appendChild(root);
+            };
+
+            // 1. Profile Core parameters
+            createAccordion('profile', 'Value & Governing Jurisdiction', '💰', 'bg-emerald-100', 'text-emerald-800', (body) => {
+                body.className += ' grid grid-cols-1 md:grid-cols-3 gap-4';
+                body.innerHTML = `
+                    <div class="bg-slate-50 p-3 rounded border border-slate-100">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Estimated Value</span>
+                        <span class="text-base font-extrabold text-slate-800">${d.contract_value || "Not Specified"}</span>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded border border-slate-100">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Currency</span>
+                        <span class="text-base font-extrabold text-slate-800">${d.currency || "Not Specified"}</span>
+                    </div>
+                    <div class="bg-slate-50 p-3 rounded border border-slate-100">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">Governing Law</span>
+                        <span class="text-base font-extrabold text-slate-800">${d.governing_law || "Not Specified"}</span>
+                    </div>
+                `;
+            });
+
+            // 2. Contracting Parties
+            createAccordion('parties', 'Involved Parties', '👥', 'bg-indigo-100', 'text-indigo-800', (body) => {
+                if (d.parties && d.parties.length > 0) {
+                    const grid = document.createElement('div');
+                    grid.className = 'grid grid-cols-1 md:grid-cols-2 gap-3';
+                    d.parties.forEach(p => {
+                        grid.innerHTML += `
+                            <div class="p-3 rounded-lg border border-slate-150 bg-slate-50 flex flex-col">
+                                <span class="font-bold text-slate-800 text-sm">${p.name || "Unknown Name"}</span>
+                                <span class="text-xs text-indigo-600 font-semibold mt-0.5 uppercase tracking-wide">${p.role || "Unassigned Role"}</span>
+                            </div>
+                        `;
+                    });
+                    body.appendChild(grid);
+                } else {
+                    body.innerHTML = `<p class="text-xs text-slate-400 italic">No specific contracting parties or roles identified.</p>`;
+                }
+            });
+
+            // 3. Payment Terms
+            createAccordion('payment', 'Payment Schedules & Milestones', '💳', 'bg-cyan-100', 'text-cyan-800', (body) => {
+                if (d.payment_terms && d.payment_terms.length > 0) {
+                    const stack = document.createElement('div');
+                    stack.className = 'space-y-3';
+                    d.payment_terms.forEach(pt => {
+                        stack.innerHTML += `
+                            <div class="p-3 bg-slate-50 rounded border border-slate-200/60 flex flex-col md:flex-row justify-between gap-2">
+                                <span class="text-xs text-slate-700 leading-relaxed max-w-xl">${pt.description}</span>
+                                ${pt.due ? `<span class="text-[10px] uppercase font-extrabold text-cyan-700 bg-cyan-50 px-2.5 py-1 rounded-full border border-cyan-100 self-start md:self-center shrink-0">Due: ${pt.due}</span>` : ''}
+                            </div>
+                        `;
+                    });
+                    body.appendChild(stack);
+                } else {
+                    body.innerHTML = `<p class="text-xs text-slate-400 italic">No custom payment milestones or constraints found.</p>`;
+                }
+            });
+
+            // 4. Critical Dates
+            createAccordion('deadlines', 'Critical Dates & Milestones', '📅', 'bg-orange-100', 'text-orange-800', (body) => {
+                if (d.deadlines && d.deadlines.length > 0) {
+                    const stack = document.createElement('div');
+                    stack.className = 'space-y-2.5';
+                    d.deadlines.forEach((dl, idx) => {
+                        stack.innerHTML += `
+                            <div class="flex items-center justify-between p-3 bg-slate-50 rounded border border-slate-200/60 gap-4">
+                                <div class="flex gap-2.5 items-start">
+                                    <span class="bg-orange-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-bold mt-0.5 shrink-0">${idx + 1}</span>
+                                    <span class="text-xs font-semibold text-slate-800">${dl.milestone}</span>
+                                </div>
+                                <span class="text-xs text-orange-700 font-extrabold bg-orange-50 px-2 py-0.5 rounded border border-orange-100 shrink-0">${dl.date_or_duration}</span>
+                            </div>
+                        `;
+                    });
+                    body.appendChild(stack);
+                } else {
+                    body.innerHTML = `<p class="text-xs text-slate-400 italic">No specific timeline milestones cataloged in this tender.</p>`;
+                }
+            });
+
+            // 5. Deliverables
+            createAccordion('deliverables', 'Required Deliverables', '📦', 'bg-purple-100', 'text-purple-800', (body) => {
+                if (d.deliverables && d.deliverables.length > 0) {
+                    const stack = document.createElement('div');
+                    stack.className = 'grid grid-cols-1 gap-2';
+                    d.deliverables.forEach(del => {
+                        stack.innerHTML += `
+                            <div class="flex gap-2.5 p-3 bg-slate-50 rounded border border-slate-200/60">
+                                <span class="text-slate-400 mt-0.5 shrink-0">•</span>
+                                <span class="text-xs text-slate-700 leading-relaxed">${del.description}</span>
+                            </div>
+                        `;
+                    });
+                    body.appendChild(stack);
+                } else {
+                    body.innerHTML = `<p class="text-xs text-slate-400 italic">No detailed reports or specific deliverables found.</p>`;
+                }
+            });
+
+            // 6. Penalty Clauses (Interactive Links Enabled)
+            createAccordion('penalties', 'Strict Penalties & Liabilities', '⚠️', 'bg-rose-100', 'text-rose-800', (body) => {
+                if (d.penalty_clauses && d.penalty_clauses.length > 0) {
+                    const stack = document.createElement('div');
+                    stack.className = 'space-y-3';
+                    
+                    d.penalty_clauses.forEach(cl => {
+                        const card = document.createElement('div');
+                        const isHighlighted = state.activeHighlight === cl.source_excerpt;
+                        card.className = `p-3 rounded border transition duration-200 flex flex-col gap-2 cursor-pointer ${
+                            isHighlighted 
+                                ? 'bg-amber-50/80 border-amber-400 shadow-md ring-1 ring-amber-400' 
+                                : 'bg-rose-50/30 border-rose-100 hover:border-rose-300'
+                        }`;
+                        card.title = "Click to locate verbatim segment in specification";
+                        
+                        if (cl.source_excerpt) {
+                            card.onclick = () => focusAndHighlightSegment(cl.source_excerpt);
+                        }
+
+                        card.innerHTML = `
+                            <div class="flex justify-between items-start gap-2">
+                                <span class="text-xs font-semibold text-rose-950 leading-relaxed">${cl.description}</span>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    ${cl.amount_or_rate ? `<span class="text-[10px] uppercase font-extrabold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Rate: ${cl.amount_or_rate}</span>` : ''}
+                                    ${cl.source_excerpt ? `<span class="p-1 rounded bg-slate-100 text-slate-500 hover:text-indigo-600 shadow-sm"><i class="fa-solid fa-crosshairs text-xs"></i></span>` : ''}
+                                </div>
+                            </div>
+                            ${cl.trigger_condition ? `<div class="text-[11px] text-slate-500 bg-white/80 px-2 py-1.5 rounded border border-slate-100 mt-1"><span class="font-semibold text-slate-700">Trigger:</span> ${cl.trigger_condition}</div>` : ''}
+                            ${cl.source_excerpt ? `
+                                <div class="text-[10px] italic text-slate-500 border-l-2 border-indigo-200 pl-2 py-0.5 mt-1 bg-indigo-50/20">
+                                    <span class="font-semibold not-italic text-indigo-700 block mb-0.5"><i class="fa-solid fa-quote-left text-[8px]"></i> Verbatim Grounding Quote:</span>
+                                    "${cl.source_excerpt}"
+                                </div>
+                            ` : ''}
+                        `;
+                        stack.appendChild(card);
+                    });
+                    body.appendChild(stack);
+                } else {
+                    body.innerHTML = `<p class="text-xs text-slate-400 italic">No severe custom penalty clauses or rate structures detected.</p>`;
+                }
+            });
+
+            // 7. Red Flags Risk Assessment (Interactive Links Enabled)
+            createAccordion('redFlags', 'Risk Assessment (Red Flags)', '🚩', 'bg-red-100', 'text-red-800', (body) => {
+                if (d.red_flags && d.red_flags.length > 0) {
+                    const stack = document.createElement('div');
+                    stack.className = 'space-y-2.5';
+                    
+                    d.red_flags.forEach(rf => {
+                        const card = document.createElement('div');
+                        const isHighlighted = state.activeHighlight === rf.source_excerpt;
+                        const isHigh = rf.severity?.toLowerCase() === 'high';
+                        const isMed = rf.severity?.toLowerCase() === 'medium';
+                        
+                        card.className = `p-3 rounded-lg border flex flex-col gap-2 transition duration-200 cursor-pointer ${
+                            isHighlighted 
+                                ? 'bg-amber-50 border-amber-400 shadow-md ring-1 ring-amber-400' 
+                                : isHigh 
+                                ? 'bg-rose-50/50 border-rose-150 hover:border-rose-300' 
+                                : isMed 
+                                ? 'bg-amber-50/50 border-amber-150 hover:border-amber-300' 
+                                : 'bg-slate-50 border-slate-200 hover:border-indigo-300'
+                        }`;
+                        card.title = "Click to locate verbatim risk excerpt in specification";
+                        
+                        if (rf.source_excerpt) {
+                            card.onclick = () => focusAndHighlightSegment(rf.source_excerpt);
+                        }
+
+                        card.innerHTML = `
+                            <div class="flex items-start gap-3 justify-between">
+                                <div class="flex gap-2">
+                                    <span class="mt-0.5 text-xs">⚠️</span>
+                                    <span class="text-xs text-slate-700 leading-relaxed font-semibold">${rf.description}</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                    <span class="text-[9px] uppercase font-black px-2 py-0.5 rounded-full border ${
+                                        isHigh 
+                                            ? 'text-rose-700 bg-rose-50 border-rose-200' 
+                                            : isMed 
+                                            ? 'text-amber-700 bg-amber-50 border-amber-200' 
+                                            : 'text-slate-600 bg-slate-100 border-slate-200'
+                                    }">${rf.severity || 'low'} Risk</span>
+                                    ${rf.source_excerpt ? `<span class="p-1 rounded bg-slate-150/70 text-slate-500 hover:text-indigo-600 shadow-sm"><i class="fa-solid fa-crosshairs text-xs"></i></span>` : ''}
+                                </div>
+                            </div>
+                            ${rf.source_excerpt ? `
+                                <div class="text-[10px] italic text-slate-500 border-l-2 border-indigo-200 pl-2 py-0.5 mt-1 bg-indigo-50/20">
+                                    <span class="font-semibold not-italic text-indigo-700 block mb-0.5"><i class="fa-solid fa-quote-left text-[8px]"></i> Verbatim Grounding Quote:</span>
+                                    "${rf.source_excerpt}"
+                                </div>
+                            ` : ''}
+                        `;
+                        stack.appendChild(card);
+                    });
+                    body.appendChild(stack);
+                } else {
+                    body.innerHTML = `<p class="text-xs text-slate-400 italic">No distinct contractual red-flags identified.</p>`;
+                }
+            });
+        }
+
+        // jsPDF EXECUTIVE REPORT EXPORT ENGINE
+        function triggerPDFReportExport() {
+            if (!state.summaryData) return;
+            
+            const label = document.getElementById('pdf-export-label');
+            const btn = document.getElementById('pdf-export-btn');
+
+            label.innerText = "Exporting...";
+            btn.disabled = true;
+
+            setTimeout(() => {
+                try {
+                    const { jsPDF } = window.jspdf;
+                    if (!jsPDF) throw new Error("jsPDF package initialization failed.");
+
+                    const doc = new jsPDF('p', 'mm', 'a4');
+                    const pageColor = '#0f172a'; // Deep Slate Navy
+                    const accentColor = '#4f46e5'; // Indigo Core
+
+                    // Cover styling / Top Header bar
+                    doc.setFillColor(pageColor);
+                    doc.rect(0, 0, 210, 18, 'F');
+
+                    doc.setTextColor('#ffffff');
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(14);
+                    doc.text("TENDER ANALYSIS EXECUTIVE REPORT", 14, 11);
+
+                    doc.setTextColor('#64748b'); // Slate Subtitle
+                    doc.setFontSize(8);
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 14, 25);
+                    doc.text(`Source Document: ${state.fileName}`, 14, 29);
+
+                    let verticalPos = 37;
+
+                    // Header Parameters profile block
+                    doc.setFillColor('#f8fafc');
+                    doc.rect(14, verticalPos, 182, 22, 'F');
+                    doc.setDrawColor('#cbd5e1');
+                    doc.rect(14, verticalPos, 182, 22, 'S');
+
+                    doc.setTextColor('#334155');
+                    doc.setFontSize(9);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text("ESTIMATED CONTRACT VALUE", 20, verticalPos + 7);
+                    doc.text("CURRENCY", 90, verticalPos + 7);
+                    doc.text("GOVERNING LAW", 145, verticalPos + 7);
+
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor('#0f172a');
+                    doc.setFontSize(11);
+                    doc.text(state.summaryData.contract_value || "Not Specified", 20, verticalPos + 15);
+                    doc.text(state.summaryData.currency || "Not Specified", 90, verticalPos + 15);
+                    doc.text(state.summaryData.governing_law || "Not Specified", 145, verticalPos + 15);
+
+                    verticalPos += 30;
+
+                    // Table renderer helper
+                    const addReportTable = (title, headers, rows) => {
+                        doc.setTextColor(accentColor);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setFontSize(11);
+                        doc.text(title.toUpperCase(), 14, verticalPos);
+                        verticalPos += 3;
+
+                        doc.autoTable({
+                            startY: verticalPos,
+                            head: [headers],
+                            body: rows,
+                            theme: 'striped',
+                            headStyles: { fillColor: '#1e293b', textColor: '#ffffff', fontSize: 9, fontStyle: 'bold' },
+                            bodyStyles: { fontSize: 8, textColor: '#334155' },
+                            margin: { left: 14, right: 14 },
+                            styles: { overflow: 'linebreak', cellWidth: 'auto' },
+                            didDrawPage: (data) => { verticalPos = data.cursor.y + 10; }
+                        });
+                    };
+
+                    const d = state.summaryData;
+
+                    // Section 1: Contracting Parties
+                    if (d.parties && d.parties.length > 0) {
+                        const rows = d.parties.map(p => [p.name || 'Unknown', p.role || 'Unassigned']);
+                        addReportTable("Contracting Parties", ["Party Name", "Executing Role"], rows);
+                    }
+
+                    // Section 2: Payment Schedules
+                    if (d.payment_terms && d.payment_terms.length > 0) {
+                        const rows = d.payment_terms.map(pt => [pt.description || '', pt.due || 'Immediate']);
+                        addReportTable("Payment Terms & Schedules", ["Clause Description", "Due Date/Milestone"], rows);
+                    }
+
+                    if (verticalPos > 240) { doc.addPage(); verticalPos = 20; }
+
+                    // Section 3: Deadlines
+                    if (d.deadlines && d.deadlines.length > 0) {
+                        const rows = d.deadlines.map(dl => [dl.milestone || '', dl.date_or_duration || 'Ongoing']);
+                        addReportTable("Critical Milestones & Timeline", ["Milestone Event", "Date/Duration Constraint"], rows);
+                    }
+
+                    if (verticalPos > 240) { doc.addPage(); verticalPos = 20; }
+
+                    // Section 4: Required Deliverables
+                    if (d.deliverables && d.deliverables.length > 0) {
+                        const rows = d.deliverables.map(del => [del.description || '']);
+                        addReportTable("Core Deliverables", ["Required Service / Technical Deliverable Description"], rows);
+                    }
+
+                    if (verticalPos > 240) { doc.addPage(); verticalPos = 20; }
+
+                    // Section 5: Penalties & Liabilities
+                    if (d.penalty_clauses && d.penalty_clauses.length > 0) {
+                        const rows = d.penalty_clauses.map(pc => [
+                            pc.description || '',
+                            pc.amount_or_rate || 'Unspecified',
+                            pc.trigger_condition || '',
+                            pc.source_excerpt || 'N/A'
+                        ]);
+                        addReportTable("Liabilities & Penalty Clauses", ["Clause Description", "Rate/Amount", "Trigger Condition", "Source Grounding reference"], rows);
+                    }
+
+                    if (verticalPos > 240) { doc.addPage(); verticalPos = 20; }
+
+                    // Section 6: Red Flags Risk Assessment
+                    if (d.red_flags && d.red_flags.length > 0) {
+                        const rows = d.red_flags.map(rf => [
+                            rf.description || '',
+                            (rf.severity || 'low').toUpperCase(),
+                            rf.source_excerpt || 'N/A'
+                        ]);
+                        addReportTable("Risk Assessment & Red Flags", ["Concern Identified", "Severity", "Verbatim Document Segment"], rows);
+                    }
+
+                    // Footer signature
+                    if (verticalPos > 270) { doc.addPage(); verticalPos = 20; }
+                    doc.setTextColor('#94a3b8');
+                    doc.setFontSize(7);
+                    doc.setFont('helvetica', 'italic');
+                    doc.text("Disclaimer: This summary report is automatically compiled through AI analysis. Please verify clauses with expert legal guidance.", 14, verticalPos + 5);
+
+                    // Execute browser save dialog
+                    const cleanName = state.fileName.replace(/\.[^/.]+$/, "");
+                    doc.save(`Tender_Analysis_Report_${cleanName}.pdf`);
+
+                    label.innerText = "Export PDF Report";
+                } catch (err) {
+                    console.error(err);
+                    label.innerText = "Export Failed";
+                } finally {
+                    btn.disabled = false;
+                }
+            }, 300);
+        }
+
+        // Numerical size mapper helper
+        function formatBytes(bytes, decimals = 2) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
